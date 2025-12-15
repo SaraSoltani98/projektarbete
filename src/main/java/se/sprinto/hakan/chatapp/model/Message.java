@@ -3,28 +3,51 @@ package se.sprinto.hakan.chatapp.model;
 import java.time.LocalDateTime;
 
 public class Message {
-    private int id;
-    //använder endast userId här, eftersom hela Usern inte behövs
-    private int userId;
+
+    private Long id;
+    private User user;
     private String text;
     private LocalDateTime timestamp;
 
-    public Message(int userId, String text, LocalDateTime timestamp) {
-        this.userId = userId;
+    public Message(User user, String text, LocalDateTime timestamp) {
+        this.user = user;
         this.text = text;
         this.timestamp = timestamp;
     }
 
-    public int getUserId() {
-        return userId;
+    public Message(){
+
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
     }
 
     public String getText() {
         return text;
     }
 
+    public void setText(String text) {
+        this.text = text;
+    }
+
     public LocalDateTime getTimestamp() {
         return timestamp;
     }
-}
 
+    public void setTimestamp(LocalDateTime timestamp) {
+        this.timestamp = timestamp;
+    }
+}

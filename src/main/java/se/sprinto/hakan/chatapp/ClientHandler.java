@@ -1,32 +1,36 @@
 package se.sprinto.hakan.chatapp;
 
-import se.sprinto.hakan.chatapp.dao.MessageDAO;
-import se.sprinto.hakan.chatapp.dao.MessageListDAO;
-import se.sprinto.hakan.chatapp.dao.UserDAO;
-import se.sprinto.hakan.chatapp.dao.UserListDAO;
 import se.sprinto.hakan.chatapp.model.Message;
 import se.sprinto.hakan.chatapp.model.User;
+import se.sprinto.hakan.chatapp.service.MessageService;
+import se.sprinto.hakan.chatapp.service.UserService;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class ClientHandler implements Runnable {
 
     private final Socket socket;
     private final ChatServer server;
+    private final UserService userService;
+    private final MessageService messageService;
+
     private PrintWriter out;
     private User user;
 
-    private final UserDAO userDAO = new UserListDAO();
-    private final MessageDAO messageDAO = new MessageListDAO();
-
-    ClientHandler(Socket socket, ChatServer server) {
+    public ClientHandler(Socket socket,
+                         ChatServer server,
+                         UserService userService,
+                         MessageService messageService) {
         this.socket = socket;
         this.server = server;
+        this.userService = userService;
+        this.messageService = messageService;
     }
 
     public User getUser() {
@@ -36,78 +40,94 @@ public class ClientHandler implements Runnable {
     @Override
     public void run() {
         try (
-                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(socket.getInputStream()));
                 PrintWriter writer = new PrintWriter(socket.getOutputStream(), true)
-
         ) {
+
             this.out = writer;
 
             writer.println("Välkommen! Har du redan ett konto? (ja/nej)");
             String answer = in.readLine();
+            boolean existingUser = false;
 
             if ("ja".equalsIgnoreCase(answer)) {
                 writer.println("Ange användarnamn:");
                 String username = in.readLine();
+
                 writer.println("Ange lösenord:");
                 String password = in.readLine();
 
-                user = userDAO.login(username, password);
+                user = userService.login(username, password);
+
                 if (user == null) {
                     writer.println("Fel användarnamn eller lösenord.");
-                    writer.println("Du måste skriva /quit nu för att avsluta denna klient");
-                    writer.println("Pröva att återansluta med en ny klient");
-                    
+                    writer.println("Skriv /quit för att avsluta.");
+                } else {
+                    existingUser = true;
                 }
+
             } else {
                 writer.println("Skapa nytt konto. Ange användarnamn:");
                 String username = in.readLine();
+
                 writer.println("Ange lösenord:");
                 String password = in.readLine();
-                user = userDAO.register(new User(username, password));
+
+                user = userService.register(new User(username, password));
+
                 writer.println("Konto skapat. Välkommen, " + user.getUsername() + "!");
             }
 
-            writer.println("Du är inloggad som: " + user.getUsername() + "");
-            writer.println("Nu kan du börja skriva meddelanden");
-            writer.println("Skriv /quit för att avsluta");
-            writer.println("Skriv /mymsgs för att lista alla dina meddelanden");
+            writer.println("Du är inloggad som: " + user.getUsername());
 
-            System.out.println(user.getUsername() + " anslöt.");
+            if (existingUser) {
+                List<Message> messageForUser = user.getMessages();
+                if (messageForUser != null && !messageForUser.isEmpty()) {
+                    writer.println("Din chatthistorik:");
+                    for (Message m : messageForUser) {
+                        writer.println("[" + m.getTimestamp() + "] " + m.getText());
+                    }
+                }
+            }
 
-            String message;
-            while ((message = in.readLine()) != null) {
-                if (message.equalsIgnoreCase("/quit")) {
+            writer.println("Nu kan du börja chatta.");
+            writer.println("/mymsgs visar dina meddelanden.");
+            writer.println("/quit avslutar sessionen.");
+
+            String msg;
+            while ((msg = in.readLine()) != null) {
+
+                if (msg.equalsIgnoreCase("/quit")) {
                     break;
-                } else if (message.equalsIgnoreCase("/mymsgs")) {
-                    // Hämta meddelanden för denna användare
-                    List<Message> messages = messageDAO.getMessagesByUserId(user.getId());
+
+                } else if (msg.equalsIgnoreCase("/mymsgs")) {
+                    List<Message> messages = messageService.getMessages(user.getId());
                     if (messages.isEmpty()) {
-                        out.println("Inga sparade meddelanden.");
+                        writer.println("Inga meddelanden sparade.");
                     } else {
-                        out.println("Dina meddelanden:");
                         for (Message m : messages) {
-                            out.println("[" + m.getTimestamp() + "] " + m.getText());
+                            writer.println("[" + m.getTimestamp() + "] " + m.getText());
                         }
                     }
+
                 } else {
-                    server.broadcast(message, this);
-                    messageDAO.saveMessage(new Message(user.getId(), message, java.time.LocalDateTime.now()));
+                    server.broadcast(msg, this);
+                    messageService.save(new Message(user, msg, LocalDateTime.now()));
                 }
             }
 
         } catch (IOException e) {
-            System.out.println("Problem med klient: " + e.getMessage());
+            e.printStackTrace();
         } finally {
             server.removeClient(this);
             try {
                 socket.close();
-            } catch (IOException ignored) {
-            }
+            } catch (IOException ignored) {}
         }
     }
 
-    void sendMessage(String msg) {
+    public void sendMessage(String msg) {
         if (out != null) out.println(msg);
     }
 }
-

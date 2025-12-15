@@ -1,48 +1,57 @@
 package se.sprinto.hakan.chatapp;
 
+import org.springframework.stereotype.Component;
+import se.sprinto.hakan.chatapp.service.UserService;
+import se.sprinto.hakan.chatapp.service.MessageService;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.List;
 
+@Component
 public class ChatServer {
 
-    private final int port;
-    private final Set<ClientHandler> clients = ConcurrentHashMap.newKeySet();
+    private final UserService userService;
+    private final MessageService messageService;
 
-    public ChatServer(int port) {
-        this.port = port;
+    private final List<ClientHandler> clients = new ArrayList<>();
+
+    public ChatServer(UserService userService, MessageService messageService) {
+        this.userService = userService;
+        this.messageService = messageService;
+        startServer();
     }
 
-    public void start() {
-        System.out.println("Server startar på port " + port + "...");
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                ClientHandler handler = new ClientHandler(clientSocket, this);
-                clients.add(handler);
-                new Thread(handler).start();
+    private void startServer() {
+        new Thread(() -> {
+            try (ServerSocket serverSocket = new ServerSocket(5555)) {
+                System.out.println("Server startad på port 5555...");
+
+                while (true) {
+                    Socket socket = serverSocket.accept();
+                    ClientHandler handler =
+                            new ClientHandler(socket, this, userService, messageService);
+                    clients.add(handler);
+                    new Thread(handler).start();
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        }).start();
     }
 
-    void broadcast(String message, ClientHandler sender) {
-        System.out.println("Meddelande från " + sender.getUser().getUsername() + ": " + message);
+    public void broadcast(String message, ClientHandler from) {
         for (ClientHandler client : clients) {
-            if (client != sender) {
-                client.sendMessage(sender.getUser().getUsername() + ": " + message);
+            if (client != from) {
+                client.sendMessage(from.getUser().getUsername() + ": " + message);
             }
         }
     }
 
-    void removeClient(ClientHandler client) {
-        clients.remove(client);
-        System.out.println(client.getUser().getUsername() + " kopplade från.");
+    public void removeClient(ClientHandler c) {
+        clients.remove(c);
     }
-
-
 }
-
