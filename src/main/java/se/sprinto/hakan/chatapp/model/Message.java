@@ -1,14 +1,20 @@
 package se.sprinto.hakan.chatapp.model;
 
 import java.time.LocalDateTime;
+import jakarta.persistence.*;
 
+@Entity
+@Table(name = "messages")
 public class Message {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private User user;
     private String text;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
     private LocalDateTime timestamp;
-
     public Message(User user, String text, LocalDateTime timestamp) {
         this.user = user;
         this.text = text;
